@@ -402,24 +402,6 @@ const applyDefaultsToAll = () => {
             <h2>上传预览</h2>
             <p className="helper-text">每张照片都可以单独设置标题、拍摄月份和人物。</p>
           </div>
-
-          <div className="action-row">
-            <button
-              className="secondary-btn"
-              onClick={clearAllPending}
-              disabled={uploading || pendingPhotos.length === 0}
-            >
-              清空全部
-            </button>
-
-            <button
-              className="primary-btn"
-              onClick={handleBatchUpload}
-              disabled={uploading || pendingPhotos.length === 0}
-            >
-              {uploading ? "上传中..." : "确认批量上传"}
-            </button>
-          </div>
         </div>
 
         {pendingPhotos.length === 0 ? (
@@ -506,6 +488,25 @@ const applyDefaultsToAll = () => {
             })}
           </div>
         )}
+{pendingPhotos.length > 0 && (
+  <div className="upload-footer-actions">
+    <button
+      className="secondary-btn"
+      onClick={clearAllPending}
+      disabled={uploading}
+    >
+      清空全部
+    </button>
+
+    <button
+      className="primary-btn"
+      onClick={handleBatchUpload}
+      disabled={uploading}
+    >
+      {uploading ? "上传中..." : "确认批量上传"}
+    </button>
+  </div>
+)} 
       </section>
     </div>
   )

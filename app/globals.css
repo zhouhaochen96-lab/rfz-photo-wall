@@ -568,6 +568,18 @@ button:disabled {
     transform: translateY(0);
   }
 }
+.upload-footer-actions {
+  margin-top: 28px;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.upload-footer-actions .primary-btn {
+  padding: 12px 24px;
+  font-size: 15px;
+}
 @media (max-width: 768px) {
   .photo-wall-overlay h3,
   .photo-wall-overlay p,
