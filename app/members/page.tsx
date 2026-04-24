@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase"
 type Person = {
   id: number
   name: string
-  created_at?: string
 }
 
 export default function MembersPage() {
@@ -29,14 +28,24 @@ export default function MembersPage() {
   }
 
   const addPerson = async () => {
-    if (!name.trim()) return
+    const cleanName = name.trim()
+
+    if (!cleanName) {
+      alert("请输入成员名字")
+      return
+    }
+
+    const exists = persons.some((person) => person.name.trim() === cleanName)
+
+    if (exists) {
+      alert("该成员已存在，不能重复添加")
+      return
+    }
 
     try {
       setLoading(true)
 
-      const { error } = await supabase
-        .from("persons")
-        .insert([{ name: name.trim() }])
+      const { error } = await supabase.from("persons").insert([{ name: cleanName }])
 
       if (error) {
         console.log("新增成员失败:", error)
@@ -58,10 +67,8 @@ export default function MembersPage() {
   return (
     <div className="page-stack">
       <section className="hero-card">
-        <div>
-          <h1>成员管理</h1>
-          <p>维护 RFZ 固定成员，也可以在这里继续补充新的朋友。</p>
-        </div>
+        <h1>成员管理</h1>
+        <p>维护 RFZ 固定成员。成员名称不能重复。</p>
       </section>
 
       <section className="panel-card">
@@ -71,6 +78,11 @@ export default function MembersPage() {
             className="text-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      addPerson()
+    }
+  }}
             placeholder="输入成员名字"
           />
           <button className="primary-btn" onClick={addPerson} disabled={loading}>
@@ -86,17 +98,15 @@ export default function MembersPage() {
         </div>
 
         {persons.length === 0 ? (
-          <p className="empty-text">还没有成员，先添加第一个吧。</p>
+          <p className="empty-text">暂无成员。</p>
         ) : (
           <div className="member-grid">
             {persons.map((person) => (
               <div key={person.id} className="member-card">
-                <div className="member-avatar">
-                  {person.name?.slice(0, 1) || "?"}
-                </div>
+                <div className="member-avatar">{person.name.slice(0, 1)}</div>
                 <div>
                   <div className="member-name">{person.name}</div>
-                  <div className="member-meta">ID #{person.id}</div>
+                  <div className="member-meta">RFZ 成员</div>
                 </div>
               </div>
             ))}
