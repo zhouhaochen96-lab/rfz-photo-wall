@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import exifr from "exifr"
 
 type Person = {
   id: number
@@ -15,6 +16,31 @@ type PendingPhoto = {
   title: string
   shotMonth: string
   selectedPersons: number[]
+}
+
+async function getPhotoMonth(file: File) {
+  try {
+    const exif = await exifr.parse(file)
+
+    const date =
+      exif?.DateTimeOriginal ||
+      exif?.CreateDate ||
+      exif?.ModifyDate
+
+    if (!date) return ""
+
+    const d = new Date(date)
+
+    if (Number.isNaN(d.getTime())) return ""
+
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+
+    return `${year}-${month}`
+  } catch (error) {
+    console.log("读取照片 EXIF 失败:", error)
+    return ""
+  }
 }
 
 export default function UploadPage() {
@@ -48,7 +74,7 @@ export default function UploadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleFilesChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFilesChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
 
@@ -59,17 +85,23 @@ export default function UploadPage() {
       return
     }
 
-    const newItems: PendingPhoto[] = imageFiles.map((file) => ({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      file,
-      previewUrl: URL.createObjectURL(file),
-      title: file.name.replace(/\.[^/.]+$/, ""),
-      shotMonth: defaultShotMonth,
-      selectedPersons: [...defaultSelectedPersons],
-    }))
+const newItems: PendingPhoto[] = []
 
-    setPendingPhotos((prev) => [...prev, ...newItems])
-    e.target.value = ""
+for (const file of imageFiles) {
+  const autoMonth = await getPhotoMonth(file)
+
+  newItems.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    file,
+    previewUrl: URL.createObjectURL(file),
+    title: file.name.replace(/\.[^/.]+$/, ""),
+    shotMonth: autoMonth || defaultShotMonth,
+    selectedPersons: [...defaultSelectedPersons],
+  })
+}
+
+setPendingPhotos((prev) => [...prev, ...newItems])
+e.target.value = ""
   }
 
   const updatePendingField = (
@@ -245,7 +277,7 @@ export default function UploadPage() {
           disabled={uploading}
         />
 
-        <p className="helper-text">选择后不会立刻上传，确认无误后再统一提交。</p>
+        <p className="helper-text">选择后不会立刻上传。系统会尝试自动读取照片拍摄月份，读不到时可手动选择。</p>
       </section>
 
       <section className="panel-card">
