@@ -10,23 +10,28 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const login = async () => {
-    if (!email || !password) {
-      alert("请输入邮箱和密码")
-      return
-    }
-
-    setLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-
-    if (error) {
-      alert(error.message)
-      return
-    }
-
-    router.push("/walls")
+const login = async () => {
+  if (!email || !password) {
+    alert("请输入邮箱和密码")
+    return
   }
+
+  setLoading(true)
+
+  const { error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  setLoading(false)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  window.location.href = "/walls"
+}
 
   const register = async () => {
     if (!email || !password) {
