@@ -1,80 +1,94 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState("")
 
-const login = async () => {
-  if (!email || !password) {
-    alert("请输入邮箱和密码")
-    return
+  const login = async () => {
+    setMessage("正在登录...")
+
+    if (!email.trim() || !password.trim()) {
+      setMessage("请输入邮箱和密码")
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+
+      console.log("login data:", data)
+      console.log("login error:", error)
+
+      if (error) {
+        setMessage(`登录失败：${error.message}`)
+        return
+      }
+
+      setMessage("登录成功，正在跳转...")
+      window.location.assign("/walls")
+    } catch (err) {
+      console.log("login catch error:", err)
+      setMessage("登录异常，请打开控制台查看错误")
+    } finally {
+      setLoading(false)
+    }
   }
-
-  setLoading(true)
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  setLoading(false)
-
-  if (error) {
-    alert(error.message)
-    return
-  }
-
-  window.location.href = "/walls"
-}
 
   const register = async () => {
-    if (!email || !password) {
-      alert("请输入邮箱和密码")
+    setMessage("正在注册...")
+
+    if (!email.trim() || !password.trim()) {
+      setMessage("请输入邮箱和密码")
       return
     }
 
-    setLoading(true)
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-    setLoading(false)
+    try {
+      setLoading(true)
 
-    if (error) {
-      alert(error.message)
-      return
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) {
+        setMessage(`注册失败：${error.message}`)
+        return
+      }
+
+      setMessage("注册邮件已发送，请去邮箱完成验证。")
+    } finally {
+      setLoading(false)
     }
-
-    alert("注册邮件已发送，请先去邮箱完成验证。")
   }
 
   const resetPassword = async () => {
-    if (!email) {
-      alert("请先输入邮箱")
+    if (!email.trim()) {
+      setMessage("请先输入邮箱")
       return
     }
 
-    setLoading(true)
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
       redirectTo: `${window.location.origin}/update-password`,
     })
-    setLoading(false)
 
     if (error) {
-      alert(error.message)
+      setMessage(`发送失败：${error.message}`)
       return
     }
 
-    alert("找回密码邮件已发送，请查收邮箱。")
+    setMessage("找回密码邮件已发送，请查收邮箱。")
   }
 
   return (
@@ -106,7 +120,7 @@ const login = async () => {
 
         <div className="action-row">
           <button className="primary-btn" onClick={login} disabled={loading}>
-            {loading ? "处理中..." : "登录"}
+            {loading ? "登录中..." : "登录"}
           </button>
 
           <button className="secondary-btn" onClick={register} disabled={loading}>
@@ -117,6 +131,8 @@ const login = async () => {
             忘记密码
           </button>
         </div>
+
+        {message && <p className="helper-text" style={{ marginTop: 16 }}>{message}</p>}
       </section>
     </div>
   )
