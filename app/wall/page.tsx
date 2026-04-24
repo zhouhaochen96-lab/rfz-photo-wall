@@ -148,10 +148,9 @@ export default function WallPage() {
                 .join(" · ") || "未标记人物"
 
             return (
-              <div key={photo.id} className="photo-wall-card">
-                <img
-  src={photo.image_url}
-  alt={photo.title || "photo"}
+              <div
+  key={photo.id}
+  className="photo-wall-card"
   onClick={() =>
     setPreviewPhoto({
       title: photo.title,
@@ -160,25 +159,26 @@ export default function WallPage() {
       personNames,
     })
   }
-/>
+>
+  <img src={photo.image_url} alt={photo.title || "photo"} />
 
                 <div className="photo-wall-overlay">
                   <h3>{photo.title || "未命名照片"}</h3>
                   <p>{personNames}</p>
                   <p>{photo.shot_month || "未填写时间"}</p>
 
-                  <div className="card-actions">
-                    <button className="secondary-btn" onClick={() => setEditingPhoto(photo)}>
-                      编辑
-                    </button>
-                    <button
-                      className="danger-btn"
-                      onClick={() => deletePhoto(photo)}
-                      disabled={deletingId === photo.id}
-                    >
-                      {deletingId === photo.id ? "删除中..." : "删除"}
-                    </button>
-                  </div>
+<div className="card-actions" onClick={(e) => e.stopPropagation()}>
+  <button className="secondary-btn" onClick={() => setEditingPhoto(photo)}>
+    编辑
+  </button>
+  <button
+    className="danger-btn"
+    onClick={() => deletePhoto(photo)}
+    disabled={deletingId === photo.id}
+  >
+    {deletingId === photo.id ? "删除中..." : "删除"}
+  </button>
+</div>
                 </div>
               </div>
             )
