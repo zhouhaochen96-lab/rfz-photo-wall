@@ -1,16 +1,22 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { getCurrentWall, type CurrentWall } from "@/lib/currentWall"
 import EditPhotoModal from "@/components/EditPhotoModal"
 
-type Person = { id: number; name: string }
+type Person = {
+  id: number
+  name: string
+}
+
 type PhotoPersonRelation = {
   person_id: number
-  persons: { id: number; name: string } | null
+  persons: {
+    id: number
+    name: string
+  } | null
 }
+
 type Photo = {
   id: number
   title: string | null
@@ -20,39 +26,27 @@ type Photo = {
 }
 
 export default function WallPage() {
-  const router = useRouter()
-  const [wall, setWall] = useState<CurrentWall | null>(null)
   const [persons, setPersons] = useState<Person[]>([])
   const [photos, setPhotos] = useState<Photo[]>([])
-  const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null)
   const [activePersonId, setActivePersonId] = useState<number | null>(null)
+  const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
-  const init = async () => {
-    const { data } = await supabase.auth.getUser()
-    if (!data.user) return router.push("/login")
-
-    const current = getCurrentWall()
-    if (!current) return router.push("/walls")
-
-    setWall(current)
-    fetchPersons(current.id)
-    fetchPhotos(current.id)
-  }
-
-  const fetchPersons = async (wallId: number) => {
-    const { data } = await supabase
+  const fetchPersons = async () => {
+    const { data, error } = await supabase
       .from("persons")
       .select("*")
-      .eq("wall_id", wallId)
-      .order("id")
+      .order("id", { ascending: true })
+
+    if (error) {
+      console.log("获取成员失败:", error)
+      return
+    }
 
     setPersons(data || [])
   }
 
-  const fetchPhotos = async (wallId?: number) => {
-    const targetWallId = wallId || wall?.id
-    if (!targetWallId) return
-
+  const fetchPhotos = async () => {
     const { data, error } = await supabase
       .from("photos")
       .select(`
@@ -65,11 +59,10 @@ export default function WallPage() {
           )
         )
       `)
-      .eq("wall_id", targetWallId)
       .order("id", { ascending: false })
 
     if (error) {
-      console.log(error)
+      console.log("获取照片失败:", error)
       return
     }
 
@@ -77,27 +70,39 @@ export default function WallPage() {
   }
 
   const deletePhoto = async (photo: Photo) => {
-    if (!confirm("确定删除这张照片吗？")) return
+    const ok = confirm(`确定删除这张照片吗？\n\n${photo.title || "未命名照片"}`)
+    if (!ok) return
 
-    await supabase.from("photo_persons").delete().eq("photo_id", photo.id)
-    await supabase.from("photos").delete().eq("id", photo.id)
+    try {
+      setDeletingId(photo.id)
 
-    fetchPhotos()
+      await supabase.from("photo_persons").delete().eq("photo_id", photo.id)
+      await supabase.from("photos").delete().eq("id", photo.id)
+
+      fetchPhotos()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
-  const filteredPhotos = activePersonId
-    ? photos.filter((p) => p.photo_persons?.some((r) => r.person_id === activePersonId))
-    : photos
+  const filteredPhotos = useMemo(() => {
+    if (!activePersonId) return photos
+
+    return photos.filter((photo) =>
+      photo.photo_persons?.some((relation) => relation.person_id === activePersonId)
+    )
+  }, [photos, activePersonId])
 
   useEffect(() => {
-    init()
+    fetchPersons()
+    fetchPhotos()
   }, [])
 
   return (
     <div className="page-stack">
       <section className="hero-card">
-        <h1>照片墙模式</h1>
-        <p>当前照片墙：{wall?.name || "未选择"}。鼠标悬浮可以放大查看详情。</p>
+        <h1>照片墙</h1>
+        <p>平铺展示所有照片，鼠标悬浮可放大查看详情。</p>
       </section>
 
       <section className="panel-card">
@@ -109,54 +114,68 @@ export default function WallPage() {
           >
             全部
           </button>
-          {persons.map((p) => (
+
+          {persons.map((person) => (
             <button
-              key={p.id}
-              className={activePersonId === p.id ? "filter-btn active" : "filter-btn"}
-              onClick={() => setActivePersonId(activePersonId === p.id ? null : p.id)}
+              key={person.id}
+              className={activePersonId === person.id ? "filter-btn active" : "filter-btn"}
+              onClick={() =>
+                setActivePersonId(activePersonId === person.id ? null : person.id)
+              }
             >
-              {p.name}
+              {person.name}
             </button>
           ))}
         </div>
       </section>
 
-      <section className="photo-wall-grid">
-        {filteredPhotos.map((photo) => {
-          const personNames =
-            photo.photo_persons
-              ?.map((r) => r.persons?.name)
-              .filter(Boolean)
-              .join(" · ") || "未标记人物"
+      {filteredPhotos.length === 0 ? (
+        <section className="panel-card">
+          <p className="empty-text">暂无照片。</p>
+        </section>
+      ) : (
+        <section className="photo-wall-grid">
+          {filteredPhotos.map((photo) => {
+            const personNames =
+              photo.photo_persons
+                ?.map((relation) => relation.persons?.name)
+                .filter(Boolean)
+                .join(" · ") || "未标记人物"
 
-          return (
-            <div key={photo.id} className="photo-wall-card">
-              <img src={photo.image_url} alt="" />
+            return (
+              <div key={photo.id} className="photo-wall-card">
+                <img src={photo.image_url} alt={photo.title || "photo"} />
 
-              <div className="photo-wall-overlay">
-                <h3>{photo.title || "未命名照片"}</h3>
-                <p>{personNames}</p>
-                <p>{photo.shot_month || "未填写时间"}</p>
-                <div className="card-actions">
-                  <button className="secondary-btn" onClick={() => setEditingPhoto(photo)}>
-                    编辑
-                  </button>
-                  <button className="danger-btn" onClick={() => deletePhoto(photo)}>
-                    删除
-                  </button>
+                <div className="photo-wall-overlay">
+                  <h3>{photo.title || "未命名照片"}</h3>
+                  <p>{personNames}</p>
+                  <p>{photo.shot_month || "未填写时间"}</p>
+
+                  <div className="card-actions">
+                    <button className="secondary-btn" onClick={() => setEditingPhoto(photo)}>
+                      编辑
+                    </button>
+                    <button
+                      className="danger-btn"
+                      onClick={() => deletePhoto(photo)}
+                      disabled={deletingId === photo.id}
+                    >
+                      {deletingId === photo.id ? "删除中..." : "删除"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )
-        })}
-      </section>
+            )
+          })}
+        </section>
+      )}
 
       <EditPhotoModal
         open={!!editingPhoto}
         photo={editingPhoto}
         persons={persons}
         onClose={() => setEditingPhoto(null)}
-        onSaved={() => fetchPhotos()}
+        onSaved={fetchPhotos}
       />
     </div>
   )

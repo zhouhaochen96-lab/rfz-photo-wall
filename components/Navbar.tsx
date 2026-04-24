@@ -1,38 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-import { clearCurrentWall, getCurrentWall, type CurrentWall } from "@/lib/currentWall"
+import { usePathname } from "next/navigation"
 
 const navItems = [
-  { href: "/walls", label: "照片墙" },
-  { href: "/members", label: "成员" },
-  { href: "/upload", label: "上传" },
+  { href: "/members", label: "成员管理" },
+  { href: "/upload", label: "上传照片" },
   { href: "/timeline", label: "时间轴" },
-  { href: "/wall", label: "平铺墙" },
+  { href: "/wall", label: "照片墙" },
 ]
 
 export default function Navbar() {
   const pathname = usePathname()
-  const router = useRouter()
-  const [wall, setWall] = useState<CurrentWall | null>(null)
-  const [email, setEmail] = useState<string | null>(null)
-
-  useEffect(() => {
-    setWall(getCurrentWall())
-
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email || null)
-    })
-  }, [pathname])
-
-  const logout = async () => {
-    await supabase.auth.signOut()
-    clearCurrentWall()
-    router.push("/login")
-  }
 
   return (
     <header className="navbar">
@@ -52,19 +31,6 @@ export default function Navbar() {
             </Link>
           ))}
         </nav>
-
-        <div className="nav-right">
-          {wall && <span className="wall-pill">{wall.name}</span>}
-          {email ? (
-            <button className="ghost-btn small-btn" onClick={logout}>
-              退出
-            </button>
-          ) : (
-            <Link href="/login" className="ghost-btn small-btn">
-              登录
-            </Link>
-          )}
-        </div>
       </div>
     </header>
   )

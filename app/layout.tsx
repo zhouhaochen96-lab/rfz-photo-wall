@@ -1,10 +1,10 @@
 import "./globals.css"
-import { ReactNode } from "react"
+import type { ReactNode } from "react"
 import Navbar from "@/components/Navbar"
 
 export const metadata = {
   title: "RFZ照片墙",
-  description: "我们的高中毕业回忆档案馆",
+  description: "高中毕业以来的共同回忆",
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {

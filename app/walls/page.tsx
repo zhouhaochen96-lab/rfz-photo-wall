@@ -30,10 +30,14 @@ export default function WallsPage() {
     setWalls(data || [])
   }
 
+<<<<<<< HEAD
   const checkUser = async () => {
     const { data } = await supabase.auth.getUser()
     if (!data.user) router.push("/login")
   }
+=======
+
+>>>>>>> no-login-v1.1
 
   const createWall = async () => {
     const cleanName = name.trim()
@@ -56,7 +60,11 @@ export default function WallsPage() {
 
     setLoading(true)
 
+<<<<<<< HEAD
     const { data: userData } = await supabase.auth.getUser()
+=======
+
+>>>>>>> no-login-v1.1
     const user = userData.user
 
     if (!user) {
@@ -108,6 +116,7 @@ export default function WallsPage() {
       return
     }
 
+<<<<<<< HEAD
     const { data: userData } = await supabase.auth.getUser()
     const user = userData.user
 
@@ -115,6 +124,11 @@ export default function WallsPage() {
       router.push("/login")
       return
     }
+=======
+
+    const user = userData.user
+
+>>>>>>> no-login-v1.1
 
     const { data: wall, error } = await supabase
       .from("photo_walls")

@@ -46,7 +46,7 @@ export default function EditPhotoModal({
     if (!photo) return
     setTitle(photo.title || "")
     setShotMonth(photo.shot_month || "")
-    setSelectedPersons(photo.photo_persons?.map((r) => r.person_id) || [])
+    setSelectedPersons(photo.photo_persons?.map((item) => item.person_id) || [])
   }, [photo])
 
   const togglePerson = (id: number) => {
@@ -57,11 +57,11 @@ export default function EditPhotoModal({
 
   const selectedPersonNames = useMemo(() => {
     return persons
-      .filter((p) => selectedPersons.includes(p.id))
-      .map((p) => p.name)
+      .filter((person) => selectedPersons.includes(person.id))
+      .map((person) => person.name)
   }, [persons, selectedPersons])
 
-  const handleSave = async () => {
+  const saveEdit = async () => {
     if (!photo) return
 
     try {
@@ -76,12 +76,21 @@ export default function EditPhotoModal({
         .eq("id", photo.id)
 
       if (updateError) {
-        console.log(updateError)
-        alert("更新照片失败")
+        console.log("更新照片失败:", updateError)
+        alert("更新照片失败，请查看控制台")
         return
       }
 
-      await supabase.from("photo_persons").delete().eq("photo_id", photo.id)
+      const { error: deleteError } = await supabase
+        .from("photo_persons")
+        .delete()
+        .eq("photo_id", photo.id)
+
+      if (deleteError) {
+        console.log("删除旧人物关系失败:", deleteError)
+        alert("删除旧人物关系失败，请查看控制台")
+        return
+      }
 
       const relations = selectedPersons.map((personId) => ({
         photo_id: photo.id,
@@ -89,10 +98,13 @@ export default function EditPhotoModal({
       }))
 
       if (relations.length > 0) {
-        const { error } = await supabase.from("photo_persons").insert(relations)
-        if (error) {
-          console.log(error)
-          alert("更新人物失败")
+        const { error: insertError } = await supabase
+          .from("photo_persons")
+          .insert(relations)
+
+        if (insertError) {
+          console.log("写入新人物关系失败:", insertError)
+          alert("写入新人物关系失败，请查看控制台")
           return
         }
       }
@@ -116,7 +128,7 @@ export default function EditPhotoModal({
           </button>
         </div>
 
-        <img src={photo.image_url} alt="" className="modal-image" />
+        <img src={photo.image_url} alt={photo.title || "photo"} className="modal-image" />
 
         <div className="form-block">
           <label className="form-label">照片标题</label>
@@ -124,6 +136,7 @@ export default function EditPhotoModal({
             className="text-input full-input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            placeholder="修改照片标题"
           />
         </div>
 
@@ -140,27 +153,27 @@ export default function EditPhotoModal({
         <div className="form-block">
           <label className="form-label">照片人物</label>
           <div className="checkbox-wrap">
-            {persons.map((p) => (
-              <label key={p.id} className="checkbox-tag">
+            {persons.map((person) => (
+              <label key={person.id} className="checkbox-tag">
                 <input
                   type="checkbox"
-                  checked={selectedPersons.includes(p.id)}
-                  onChange={() => togglePerson(p.id)}
+                  checked={selectedPersons.includes(person.id)}
+                  onChange={() => togglePerson(person.id)}
                 />
-                <span>{p.name}</span>
+                <span>{person.name}</span>
               </label>
             ))}
           </div>
           <p className="helper-text">
-            已选：{selectedPersonNames.length ? selectedPersonNames.join("、") : "未选择"}
+            已选：{selectedPersonNames.length > 0 ? selectedPersonNames.join("、") : "未选择"}
           </p>
         </div>
 
         <div className="modal-actions">
-          <button className="primary-btn" onClick={handleSave} disabled={saving}>
+          <button className="primary-btn" onClick={saveEdit} disabled={saving}>
             {saving ? "保存中..." : "保存修改"}
           </button>
-          <button className="secondary-btn" onClick={onClose}>
+          <button className="secondary-btn" onClick={onClose} disabled={saving}>
             取消
           </button>
         </div>

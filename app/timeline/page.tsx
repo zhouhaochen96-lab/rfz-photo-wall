@@ -25,14 +25,6 @@ type Photo = {
   photo_persons?: PhotoPersonRelation[]
 }
 
-type GroupedPhotos = {
-  year: string
-  months: {
-    month: string
-    photos: Photo[]
-  }[]
-}
-
 export default function TimelinePage() {
   const [persons, setPersons] = useState<Person[]>([])
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -78,10 +70,40 @@ export default function TimelinePage() {
     setPhotos((data as Photo[]) || [])
   }
 
-  useEffect(() => {
-    fetchPersons()
-    fetchPhotos()
-  }, [])
+  const deletePhoto = async (photo: Photo) => {
+    const ok = confirm(`确定删除这张照片吗？\n\n${photo.title || "未命名照片"}`)
+    if (!ok) return
+
+    try {
+      setDeletingId(photo.id)
+
+      const { error: relationError } = await supabase
+        .from("photo_persons")
+        .delete()
+        .eq("photo_id", photo.id)
+
+      if (relationError) {
+        console.log("删除人物关系失败:", relationError)
+        alert("删除人物关系失败")
+        return
+      }
+
+      const { error: photoError } = await supabase
+        .from("photos")
+        .delete()
+        .eq("id", photo.id)
+
+      if (photoError) {
+        console.log("删除照片记录失败:", photoError)
+        alert("删除照片记录失败")
+        return
+      }
+
+      fetchPhotos()
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const filteredPhotos = useMemo(() => {
     if (!activePersonId) return photos
@@ -91,7 +113,7 @@ export default function TimelinePage() {
     )
   }, [photos, activePersonId])
 
-  const groupedPhotos = useMemo<GroupedPhotos[]>(() => {
+  const groupedPhotos = useMemo(() => {
     const groups: Record<string, Record<string, Photo[]>> = {}
 
     filteredPhotos.forEach((photo) => {
@@ -118,112 +140,43 @@ export default function TimelinePage() {
             if (b[0] === "未填写时间") return -1
             return b[0].localeCompare(a[0])
           })
-          .map(([month, photos]) => ({
-            month,
-            photos,
-          })),
+          .map(([month, photos]) => ({ month, photos })),
       }))
   }, [filteredPhotos])
 
-  const handleDeletePhoto = async (photo: Photo) => {
-    const ok = window.confirm(
-      `确定要删除这张照片吗？\n\n${photo.title || "未命名照片"}`
-    )
-    if (!ok) return
-
-    try {
-      setDeletingId(photo.id)
-
-      const filePath = (() => {
-        try {
-          const url = new URL(photo.image_url)
-          const marker = "/storage/v1/object/public/photos/"
-          const index = url.pathname.indexOf(marker)
-          if (index === -1) return null
-          return decodeURIComponent(url.pathname.slice(index + marker.length))
-        } catch {
-          return null
-        }
-      })()
-
-      const { error: deleteRelationsError } = await supabase
-        .from("photo_persons")
-        .delete()
-        .eq("photo_id", photo.id)
-
-      if (deleteRelationsError) {
-        console.log("删除人物关系失败:", deleteRelationsError)
-        alert("删除人物关系失败，请查看控制台")
-        return
-      }
-
-      const { error: deletePhotoError } = await supabase
-        .from("photos")
-        .delete()
-        .eq("id", photo.id)
-
-      if (deletePhotoError) {
-        console.log("删除 photos 失败:", deletePhotoError)
-        alert("删除照片记录失败，请查看控制台")
-        return
-      }
-
-      if (filePath) {
-        const { error: storageDeleteError } = await supabase.storage
-          .from("photos")
-          .remove([filePath])
-
-        if (storageDeleteError) {
-          console.log("删除存储文件失败:", storageDeleteError)
-        }
-      }
-
-      fetchPhotos()
-      alert("照片已删除")
-    } finally {
-      setDeletingId(null)
-    }
-  }
+  useEffect(() => {
+    fetchPersons()
+    fetchPhotos()
+  }, [])
 
   return (
     <div className="page-stack">
       <section className="hero-card">
-        <div>
-          <h1>时间轴</h1>
-          <p>按年份和月份回看你们的照片，也可以按成员筛选，随时补编辑旧照片信息。</p>
-        </div>
+        <h1>时间轴</h1>
+        <p>按年份和月份回看高中毕业以来的共同回忆。</p>
       </section>
 
       <section className="panel-card">
-        <div className="section-title-row">
-          <h2>按成员筛选</h2>
-          <span className="badge">
-            {activePersonId
-              ? `当前：${persons.find((p) => p.id === activePersonId)?.name || "未知成员"}`
-              : "当前：全部照片"}
-          </span>
-        </div>
-
+        <h2>按成员筛选</h2>
         <div className="filter-row">
           <button
             className={activePersonId === null ? "filter-btn active" : "filter-btn"}
             onClick={() => setActivePersonId(null)}
           >
-            查看全部
+            全部
           </button>
 
-          {persons.map((person) => {
-            const active = activePersonId === person.id
-            return (
-              <button
-                key={person.id}
-                className={active ? "filter-btn active" : "filter-btn"}
-                onClick={() => setActivePersonId(active ? null : person.id)}
-              >
-                {person.name}
-              </button>
-            )
-          })}
+          {persons.map((person) => (
+            <button
+              key={person.id}
+              className={activePersonId === person.id ? "filter-btn active" : "filter-btn"}
+              onClick={() =>
+                setActivePersonId(activePersonId === person.id ? null : person.id)
+              }
+            >
+              {person.name}
+            </button>
+          ))}
         </div>
       </section>
 
@@ -231,9 +184,7 @@ export default function TimelinePage() {
         <h2>时间轴照片墙</h2>
 
         {groupedPhotos.length === 0 ? (
-          <p className="empty-text">
-            {activePersonId ? "这个成员暂时还没有关联照片。" : "还没有照片，快去上传第一张吧。"}
-          </p>
+          <p className="empty-text">暂无照片。</p>
         ) : (
           groupedPhotos.map((yearGroup) => (
             <div key={yearGroup.year} className="year-block">
@@ -253,11 +204,7 @@ export default function TimelinePage() {
 
                       return (
                         <div key={photo.id} className="photo-card">
-                          <img
-                            src={photo.image_url}
-                            alt={photo.title || "photo"}
-                            className="photo-image"
-                          />
+                          <img src={photo.image_url} alt="" className="photo-image" />
 
                           <div className="photo-card-body">
                             <div className="photo-title">
@@ -277,7 +224,7 @@ export default function TimelinePage() {
                               </button>
                               <button
                                 className="danger-btn"
-                                onClick={() => handleDeletePhoto(photo)}
+                                onClick={() => deletePhoto(photo)}
                                 disabled={deletingId === photo.id}
                               >
                                 {deletingId === photo.id ? "删除中..." : "删除"}

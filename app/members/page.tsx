@@ -1,49 +1,26 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { getCurrentWall, type CurrentWall } from "@/lib/currentWall"
 
 type Person = {
   id: number
   name: string
-  wall_id: number
 }
 
 export default function MembersPage() {
-  const router = useRouter()
-  const [wall, setWall] = useState<CurrentWall | null>(null)
   const [persons, setPersons] = useState<Person[]>([])
   const [name, setName] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const init = async () => {
-    const { data } = await supabase.auth.getUser()
-    if (!data.user) {
-      router.push("/login")
-      return
-    }
-
-    const current = getCurrentWall()
-    if (!current) {
-      router.push("/walls")
-      return
-    }
-
-    setWall(current)
-    fetchPersons(current.id)
-  }
-
-  const fetchPersons = async (wallId: number) => {
+  const fetchPersons = async () => {
     const { data, error } = await supabase
       .from("persons")
       .select("*")
-      .eq("wall_id", wallId)
       .order("id", { ascending: true })
 
     if (error) {
-      console.log(error)
+      console.log("获取成员失败:", error)
       return
     }
 
@@ -51,12 +28,15 @@ export default function MembersPage() {
   }
 
   const addPerson = async () => {
-    if (!wall) return
-
     const cleanName = name.trim()
-    if (!cleanName) return
 
-    const exists = persons.some((p) => p.name.trim() === cleanName)
+    if (!cleanName) {
+      alert("请输入成员名字")
+      return
+    }
+
+    const exists = persons.some((person) => person.name.trim() === cleanName)
+
     if (exists) {
       alert("该成员已存在，不能重复添加")
       return
@@ -65,36 +45,30 @@ export default function MembersPage() {
     try {
       setLoading(true)
 
-      const { error } = await supabase
-        .from("persons")
-        .insert([{ name: cleanName, wall_id: wall.id }])
+      const { error } = await supabase.from("persons").insert([{ name: cleanName }])
 
       if (error) {
-        if (error.code === "23505") {
-          alert("该成员已存在，不能重复添加")
-        } else {
-          console.log(error)
-          alert("新增成员失败")
-        }
+        console.log("新增成员失败:", error)
+        alert("新增成员失败，请查看控制台")
         return
       }
 
       setName("")
-      fetchPersons(wall.id)
+      fetchPersons()
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    init()
+    fetchPersons()
   }, [])
 
   return (
     <div className="page-stack">
       <section className="hero-card">
         <h1>成员管理</h1>
-        <p>当前照片墙：{wall?.name || "未选择"}</p>
+        <p>维护 RFZ 固定成员。成员名称不能重复。</p>
       </section>
 
       <section className="panel-card">
@@ -104,6 +78,11 @@ export default function MembersPage() {
             className="text-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      addPerson()
+    }
+  }}
             placeholder="输入成员名字"
           />
           <button className="primary-btn" onClick={addPerson} disabled={loading}>
@@ -118,17 +97,21 @@ export default function MembersPage() {
           <span className="badge">{persons.length} 人</span>
         </div>
 
-        <div className="member-grid">
-          {persons.map((p) => (
-            <div key={p.id} className="member-card">
-              <div className="member-avatar">{p.name.slice(0, 1)}</div>
-              <div>
-                <div className="member-name">{p.name}</div>
-                <div className="member-meta">ID #{p.id}</div>
+        {persons.length === 0 ? (
+          <p className="empty-text">暂无成员。</p>
+        ) : (
+          <div className="member-grid">
+            {persons.map((person) => (
+              <div key={person.id} className="member-card">
+                <div className="member-avatar">{person.name.slice(0, 1)}</div>
+                <div>
+                  <div className="member-name">{person.name}</div>
+                  <div className="member-meta">RFZ 成员</div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )
