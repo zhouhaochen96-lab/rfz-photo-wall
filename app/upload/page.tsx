@@ -17,7 +17,6 @@ type PendingPhoto = {
   shotMonth: string
   selectedPersons: number[]
 }
-
 async function getPhotoMonth(file: File) {
   try {
     const exif = await exifr.parse(file)
@@ -27,18 +26,35 @@ async function getPhotoMonth(file: File) {
       exif?.CreateDate ||
       exif?.ModifyDate
 
-    if (!date) return ""
+    if (date) {
+      const d = new Date(date)
 
-    const d = new Date(date)
+      if (!Number.isNaN(d.getTime())) {
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, "0")
+        return `${year}-${month}`
+      }
+    }
 
-    if (Number.isNaN(d.getTime())) return ""
+    // 兜底：EXIF 读不到时，用文件最后修改时间
+    if (file.lastModified) {
+      const d = new Date(file.lastModified)
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, "0")
+      return `${year}-${month}`
+    }
 
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, "0")
-
-    return `${year}-${month}`
+    return ""
   } catch (error) {
     console.log("读取照片 EXIF 失败:", error)
+
+    if (file.lastModified) {
+      const d = new Date(file.lastModified)
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, "0")
+      return `${year}-${month}`
+    }
+
     return ""
   }
 }
