@@ -66,6 +66,7 @@ export default function UploadPage() {
 
   const [defaultShotMonth, setDefaultShotMonth] = useState("")
   const [defaultSelectedPersons, setDefaultSelectedPersons] = useState<number[]>([])
+  const [defaultTitle, setDefaultTitle] = useState("")
 
   const fetchPersons = async () => {
     const { data, error } = await supabase
@@ -161,7 +162,14 @@ e.target.value = ""
       }))
     )
   }
-
+const applyDefaultTitleToAll = () => {
+  setPendingPhotos((prev) =>
+    prev.map((item) => ({
+      ...item,
+      title: defaultTitle,
+    }))
+  )
+}
   const applyDefaultPersonsToAll = () => {
     setPendingPhotos((prev) =>
       prev.map((item) => ({
@@ -171,15 +179,16 @@ e.target.value = ""
     )
   }
 
-  const applyDefaultsToAll = () => {
-    setPendingPhotos((prev) =>
-      prev.map((item) => ({
-        ...item,
-        shotMonth: defaultShotMonth,
-        selectedPersons: [...defaultSelectedPersons],
-      }))
-    )
-  }
+const applyDefaultsToAll = () => {
+  setPendingPhotos((prev) =>
+    prev.map((item) => ({
+      ...item,
+      title: defaultTitle || item.title,
+      shotMonth: defaultShotMonth,
+      selectedPersons: [...defaultSelectedPersons],
+    }))
+  )
+}
 
   const removePendingPhoto = (id: string) => {
     setPendingPhotos((prev) => {
@@ -295,7 +304,26 @@ e.target.value = ""
 
         <p className="helper-text">选择后不会立刻上传。系统会尝试自动读取照片拍摄月份，读不到时可手动选择。</p>
       </section>
+      <div className="form-block">
+  <label className="form-label">默认照片标题</label>
+  <div className="action-row">
+    <input
+      className="text-input full-input"
+      value={defaultTitle}
+      onChange={(e) => setDefaultTitle(e.target.value)}
+      placeholder="例如：2024年五一聚会"
+      disabled={uploading}
+    />
 
+    <button
+      className="secondary-btn"
+      onClick={applyDefaultTitleToAll}
+      disabled={uploading || pendingPhotos.length === 0}
+    >
+      应用标题到全部
+    </button>
+  </div>
+</div>
       <section className="panel-card">
         <div className="section-title-row">
           <h2>批量默认设置</h2>
@@ -362,7 +390,7 @@ e.target.value = ""
               onClick={applyDefaultsToAll}
               disabled={uploading || pendingPhotos.length === 0}
             >
-              月份和人物一起应用到全部
+              标题、月份和人物一起应用到全部
             </button>
           </div>
         </div>
