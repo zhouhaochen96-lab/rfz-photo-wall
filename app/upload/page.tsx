@@ -1,208 +1,488 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { getCurrentWall, type CurrentWall } from "@/lib/currentWall"
-import EditPhotoModal from "@/components/EditPhotoModal"
 
-type Person = { id: number; name: string }
-type PhotoPersonRelation = {
-  person_id: number
-  persons: { id: number; name: string } | null
-}
-type Photo = {
+type Person = {
   id: number
-  title: string | null
-  image_url: string
-  shot_month?: string | null
-  photo_persons?: PhotoPersonRelation[]
+  name: string
 }
 
-export default function TimelinePage() {
+type PendingPhoto = {
+  id: string
+  file: File
+  previewUrl: string
+  title: string
+  shotMonth: string
+  selectedPersons: number[]
+}
+
+export default function UploadPage() {
   const router = useRouter()
+
   const [wall, setWall] = useState<CurrentWall | null>(null)
   const [persons, setPersons] = useState<Person[]>([])
-  const [photos, setPhotos] = useState<Photo[]>([])
-  const [activePersonId, setActivePersonId] = useState<number | null>(null)
-  const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null)
+  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([])
+  const [uploading, setUploading] = useState(false)
+
+  const [defaultShotMonth, setDefaultShotMonth] = useState("")
+  const [defaultSelectedPersons, setDefaultSelectedPersons] = useState<number[]>([])
 
   const init = async () => {
     const { data } = await supabase.auth.getUser()
-    if (!data.user) return router.push("/login")
 
-    const current = getCurrentWall()
-    if (!current) return router.push("/walls")
+    if (!data.user) {
+      router.push("/login")
+      return
+    }
 
-    setWall(current)
-    fetchPersons(current.id)
-    fetchPhotos(current.id)
+    const currentWall = getCurrentWall()
+
+    if (!currentWall) {
+      router.push("/walls")
+      return
+    }
+
+    setWall(currentWall)
+    fetchPersons(currentWall.id)
   }
 
   const fetchPersons = async (wallId: number) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("persons")
       .select("*")
       .eq("wall_id", wallId)
       .order("id", { ascending: true })
 
-    setPersons(data || [])
-  }
-
-  const fetchPhotos = async (wallId?: number) => {
-    const targetWallId = wallId || wall?.id
-    if (!targetWallId) return
-
-    const { data, error } = await supabase
-      .from("photos")
-      .select(`
-        *,
-        photo_persons (
-          person_id,
-          persons (
-            id,
-            name
-          )
-        )
-      `)
-      .eq("wall_id", targetWallId)
-      .order("shot_month", { ascending: false, nullsFirst: false })
-      .order("id", { ascending: false })
-
     if (error) {
-      console.log(error)
+      console.log("获取成员失败:", error)
       return
     }
 
-    setPhotos((data as Photo[]) || [])
+    setPersons(data || [])
   }
-
-  const filteredPhotos = useMemo(() => {
-    if (!activePersonId) return photos
-    return photos.filter((p) =>
-      p.photo_persons?.some((r) => r.person_id === activePersonId)
-    )
-  }, [photos, activePersonId])
-
-  const groupedPhotos = useMemo(() => {
-    const groups: Record<string, Record<string, Photo[]>> = {}
-
-    filteredPhotos.forEach((photo) => {
-      const month = photo.shot_month || "未填写时间"
-      const year = month !== "未填写时间" ? month.split("-")[0] : "未填写时间"
-      if (!groups[year]) groups[year] = {}
-      if (!groups[year][month]) groups[year][month] = []
-      groups[year][month].push(photo)
-    })
-
-    return Object.entries(groups)
-      .sort((a, b) => {
-        if (a[0] === "未填写时间") return 1
-        if (b[0] === "未填写时间") return -1
-        return Number(b[0]) - Number(a[0])
-      })
-      .map(([year, months]) => ({
-        year,
-        months: Object.entries(months)
-          .sort((a, b) => {
-            if (a[0] === "未填写时间") return 1
-            if (b[0] === "未填写时间") return -1
-            return b[0].localeCompare(a[0])
-          })
-          .map(([month, photos]) => ({ month, photos })),
-      }))
-  }, [filteredPhotos])
 
   useEffect(() => {
     init()
+
+    return () => {
+      pendingPhotos.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const handleFilesChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+
+    if (files.length === 0) return
+
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"))
+
+    if (imageFiles.length === 0) {
+      alert("请选择图片文件")
+      return
+    }
+
+    const newItems: PendingPhoto[] = imageFiles.map((file) => ({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+      title: file.name.replace(/\.[^/.]+$/, ""),
+      shotMonth: defaultShotMonth,
+      selectedPersons: [...defaultSelectedPersons],
+    }))
+
+    setPendingPhotos((prev) => [...prev, ...newItems])
+    e.target.value = ""
+  }
+
+  const updatePendingField = (
+    id: string,
+    field: "title" | "shotMonth",
+    value: string
+  ) => {
+    setPendingPhotos((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    )
+  }
+
+  const toggleDefaultPerson = (personId: number) => {
+    setDefaultSelectedPersons((prev) =>
+      prev.includes(personId)
+        ? prev.filter((id) => id !== personId)
+        : [...prev, personId]
+    )
+  }
+
+  const togglePendingPerson = (photoId: string, personId: number) => {
+    setPendingPhotos((prev) =>
+      prev.map((item) => {
+        if (item.id !== photoId) return item
+
+        const alreadySelected = item.selectedPersons.includes(personId)
+
+        return {
+          ...item,
+          selectedPersons: alreadySelected
+            ? item.selectedPersons.filter((id) => id !== personId)
+            : [...item.selectedPersons, personId],
+        }
+      })
+    )
+  }
+
+  const applyDefaultMonthToAll = () => {
+    setPendingPhotos((prev) =>
+      prev.map((item) => ({
+        ...item,
+        shotMonth: defaultShotMonth,
+      }))
+    )
+  }
+
+  const applyDefaultPersonsToAll = () => {
+    setPendingPhotos((prev) =>
+      prev.map((item) => ({
+        ...item,
+        selectedPersons: [...defaultSelectedPersons],
+      }))
+    )
+  }
+
+  const applyDefaultsToAll = () => {
+    setPendingPhotos((prev) =>
+      prev.map((item) => ({
+        ...item,
+        shotMonth: defaultShotMonth,
+        selectedPersons: [...defaultSelectedPersons],
+      }))
+    )
+  }
+
+  const removePendingPhoto = (id: string) => {
+    setPendingPhotos((prev) => {
+      const target = prev.find((item) => item.id === id)
+
+      if (target) {
+        URL.revokeObjectURL(target.previewUrl)
+      }
+
+      return prev.filter((item) => item.id !== id)
+    })
+  }
+
+  const clearAllPending = () => {
+    pendingPhotos.forEach((item) => URL.revokeObjectURL(item.previewUrl))
+    setPendingPhotos([])
+  }
+
+  const handleBatchUpload = async () => {
+    if (!wall) {
+      alert("请先选择照片墙")
+      router.push("/walls")
+      return
+    }
+
+    if (pendingPhotos.length === 0) {
+      alert("请先选择照片")
+      return
+    }
+
+    try {
+      setUploading(true)
+
+      for (const item of pendingPhotos) {
+        const fileExt = item.file.name.split(".").pop()
+        const filePath = `${wall.id}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${fileExt}`
+
+        const { error: uploadError } = await supabase.storage
+          .from("photos")
+          .upload(filePath, item.file)
+
+        if (uploadError) {
+          console.log("上传图片失败:", uploadError)
+          alert(`上传失败：${item.file.name}`)
+          return
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from("photos")
+          .getPublicUrl(filePath)
+
+        const { data: photoData, error: insertError } = await supabase
+          .from("photos")
+          .insert([
+            {
+              title: item.title.trim() || null,
+              image_url: publicUrlData.publicUrl,
+              shot_month: item.shotMonth || null,
+              wall_id: wall.id,
+            },
+          ])
+          .select()
+          .single()
+
+        if (insertError || !photoData) {
+          console.log("写入 photos 表失败:", insertError)
+          alert(`写入数据库失败：${item.file.name}`)
+          return
+        }
+
+        const relations = item.selectedPersons.map((personId) => ({
+          photo_id: photoData.id,
+          person_id: personId,
+        }))
+
+        if (relations.length > 0) {
+          const { error: relationError } = await supabase
+            .from("photo_persons")
+            .insert(relations)
+
+          if (relationError) {
+            console.log("写入人物关联失败:", relationError)
+            alert(`人物关联失败：${item.file.name}`)
+            return
+          }
+        }
+      }
+
+      alert("批量上传成功！")
+      clearAllPending()
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const defaultPersonNames = useMemo(() => {
+    return persons
+      .filter((person) => defaultSelectedPersons.includes(person.id))
+      .map((person) => person.name)
+  }, [persons, defaultSelectedPersons])
 
   return (
     <div className="page-stack">
       <section className="hero-card">
-        <h1>时间轴</h1>
-        <p>当前照片墙：{wall?.name || "未选择"}</p>
+        <h1>上传照片</h1>
+        <p>
+          当前照片墙：{wall?.name || "未选择"}。选择照片后，可以批量设置默认月份和人物，
+          也可以对每一张照片逐张微调。
+        </p>
       </section>
 
       <section className="panel-card">
-        <h2>按成员筛选</h2>
-        <div className="filter-row">
-          <button
-            className={activePersonId === null ? "filter-btn active" : "filter-btn"}
-            onClick={() => setActivePersonId(null)}
-          >
-            全部
-          </button>
-          {persons.map((p) => (
-            <button
-              key={p.id}
-              className={activePersonId === p.id ? "filter-btn active" : "filter-btn"}
-              onClick={() => setActivePersonId(activePersonId === p.id ? null : p.id)}
-            >
-              {p.name}
-            </button>
-          ))}
+        <div className="section-title-row">
+          <h2>选择照片</h2>
+          <span className="badge">{pendingPhotos.length} 张待上传</span>
+        </div>
+
+        <div className="upload-picker">
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleFilesChange}
+            disabled={uploading}
+          />
+          <p className="helper-text">
+            支持一次选择多张图片。选择后不会立刻上传，确认无误后再统一提交。
+          </p>
         </div>
       </section>
 
       <section className="panel-card">
-        <h2>时间轴照片墙</h2>
+        <div className="section-title-row">
+          <h2>批量默认设置</h2>
+          <span className="badge">先套用默认值，再逐张微调</span>
+        </div>
 
-        {groupedPhotos.length === 0 ? (
-          <p className="empty-text">暂无照片。</p>
-        ) : (
-          groupedPhotos.map((yearGroup) => (
-            <div key={yearGroup.year} className="year-block">
-              <div className="year-title">{yearGroup.year}</div>
+        <div className="form-grid">
+          <div className="form-block">
+            <label className="form-label">默认拍摄月份</label>
+            <div className="action-row">
+              <input
+                className="text-input month-input"
+                type="month"
+                value={defaultShotMonth}
+                onChange={(e) => setDefaultShotMonth(e.target.value)}
+                disabled={uploading}
+              />
 
-              {yearGroup.months.map((monthGroup) => (
-                <div key={monthGroup.month} className="month-block">
-                  <div className="month-title">{monthGroup.month}</div>
-
-                  <div className="timeline-grid">
-                    {monthGroup.photos.map((photo) => {
-                      const personNames =
-                        photo.photo_persons
-                          ?.map((r) => r.persons?.name)
-                          .filter(Boolean)
-                          .join(" · ") || "未标记人物"
-
-                      return (
-                        <div key={photo.id} className="photo-card">
-                          <img src={photo.image_url} alt="" className="photo-image" />
-                          <div className="photo-card-body">
-                            <div className="photo-title">{photo.title || "未命名照片"}</div>
-                            <div className="photo-meta">{personNames}</div>
-                            <div className="photo-submeta">
-                              {photo.shot_month || "未填写时间"}
-                            </div>
-                            <div className="card-actions">
-                              <button
-                                className="secondary-btn"
-                                onClick={() => setEditingPhoto(photo)}
-                              >
-                                编辑
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
+              <button
+                className="secondary-btn"
+                onClick={applyDefaultMonthToAll}
+                disabled={uploading || pendingPhotos.length === 0}
+              >
+                应用月份到全部
+              </button>
             </div>
-          ))
-        )}
+          </div>
+
+          <div className="form-block">
+            <label className="form-label">默认人物</label>
+
+            {persons.length === 0 ? (
+              <p className="helper-text">当前照片墙还没有成员，请先到“成员”页面添加。</p>
+            ) : (
+              <div className="checkbox-wrap">
+                {persons.map((person) => (
+                  <label key={person.id} className="checkbox-tag">
+                    <input
+                      type="checkbox"
+                      checked={defaultSelectedPersons.includes(person.id)}
+                      onChange={() => toggleDefaultPerson(person.id)}
+                      disabled={uploading}
+                    />
+                    <span>{person.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <p className="helper-text">
+              默认已选：
+              {defaultPersonNames.length > 0 ? defaultPersonNames.join("、") : "未选择"}
+            </p>
+
+            <div className="action-row">
+              <button
+                className="secondary-btn"
+                onClick={applyDefaultPersonsToAll}
+                disabled={uploading || pendingPhotos.length === 0}
+              >
+                应用人物到全部
+              </button>
+
+              <button
+                className="primary-btn"
+                onClick={applyDefaultsToAll}
+                disabled={uploading || pendingPhotos.length === 0}
+              >
+                月份和人物一起应用到全部
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <EditPhotoModal
-        open={!!editingPhoto}
-        photo={editingPhoto}
-        persons={persons}
-        onClose={() => setEditingPhoto(null)}
-        onSaved={() => fetchPhotos()}
-      />
+      <section className="panel-card">
+        <div className="section-title-row">
+          <div>
+            <h2>上传预览</h2>
+            <p className="helper-text">
+              每张照片都可以单独设置标题、拍摄月份和人物。
+            </p>
+          </div>
+
+          <div className="action-row">
+            <span className="badge">{pendingPhotos.length} 张待上传</span>
+
+            <button
+              className="secondary-btn"
+              onClick={clearAllPending}
+              disabled={uploading || pendingPhotos.length === 0}
+            >
+              清空全部
+            </button>
+
+            <button
+              className="primary-btn"
+              onClick={handleBatchUpload}
+              disabled={uploading || pendingPhotos.length === 0}
+            >
+              {uploading ? "上传中..." : "确认批量上传"}
+            </button>
+          </div>
+        </div>
+
+        {pendingPhotos.length === 0 ? (
+          <p className="empty-text">还没有选择照片。</p>
+        ) : (
+          <div className="upload-grid">
+            {pendingPhotos.map((item) => {
+              const selectedPersonNames = persons
+                .filter((person) => item.selectedPersons.includes(person.id))
+                .map((person) => person.name)
+
+              return (
+                <div key={item.id} className="upload-card">
+                  <img
+                    src={item.previewUrl}
+                    alt={item.title || "待上传照片"}
+                    className="upload-preview"
+                  />
+
+                  <div className="form-block">
+                    <label className="form-label">照片标题</label>
+                    <input
+                      className="text-input full-input"
+                      value={item.title}
+                      onChange={(e) =>
+                        updatePendingField(item.id, "title", e.target.value)
+                      }
+                      placeholder="照片标题"
+                      disabled={uploading}
+                    />
+                  </div>
+
+                  <div className="form-block">
+                    <label className="form-label">拍摄月份</label>
+                    <input
+                      className="text-input month-input"
+                      type="month"
+                      value={item.shotMonth}
+                      onChange={(e) =>
+                        updatePendingField(item.id, "shotMonth", e.target.value)
+                      }
+                      disabled={uploading}
+                    />
+                  </div>
+
+                  <div className="form-block">
+                    <label className="form-label">照片人物</label>
+
+                    {persons.length === 0 ? (
+                      <p className="helper-text">暂无成员。</p>
+                    ) : (
+                      <div className="checkbox-wrap">
+                        {persons.map((person) => (
+                          <label key={person.id} className="checkbox-tag">
+                            <input
+                              type="checkbox"
+                              checked={item.selectedPersons.includes(person.id)}
+                              onChange={() => togglePendingPerson(item.id, person.id)}
+                              disabled={uploading}
+                            />
+                            <span>{person.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="helper-text">
+                      已选：
+                      {selectedPersonNames.length > 0
+                        ? selectedPersonNames.join("、")
+                        : "未选择"}
+                    </p>
+                  </div>
+
+                  <button
+                    className="danger-outline-btn"
+                    onClick={() => removePendingPhoto(item.id)}
+                    disabled={uploading}
+                  >
+                    移除这张
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

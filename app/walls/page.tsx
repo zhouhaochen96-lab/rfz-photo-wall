@@ -12,90 +12,92 @@ type PhotoWall = {
   code: string | null
 }
 
-function makeWallCode() {
-  return Math.random().toString(36).slice(2, 8).toUpperCase()
-}
-
 export default function WallsPage() {
   const router = useRouter()
   const [walls, setWalls] = useState<PhotoWall[]>([])
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [customCode, setCustomCode] = useState("")
   const [joinCode, setJoinCode] = useState("")
   const [loading, setLoading] = useState(false)
+
+  const fetchWalls = async () => {
+    const { data } = await supabase
+      .from("photo_walls")
+      .select("*")
+      .order("id", { ascending: true })
+
+    setWalls(data || [])
+  }
 
   const checkUser = async () => {
     const { data } = await supabase.auth.getUser()
     if (!data.user) router.push("/login")
   }
 
-  const fetchWalls = async () => {
-    const { data, error } = await supabase
-      .from("photo_walls")
-      .select("*")
-      .order("id", { ascending: true })
-
-    if (error) {
-      console.log("获取照片墙失败:", error)
-      return
-    }
-
-    setWalls(data || [])
-  }
-
   const createWall = async () => {
-    if (!name.trim()) {
+    const cleanName = name.trim()
+    const cleanCode = customCode.trim().toUpperCase()
+
+    if (!cleanName) {
       alert("请输入照片墙名称")
       return
     }
 
-    try {
-      setLoading(true)
+    if (!cleanCode) {
+      alert("请输入照片墙编码")
+      return
+    }
 
-      const { data: userData } = await supabase.auth.getUser()
-      const user = userData.user
+    if (!/^[A-Z0-9_-]{4,20}$/.test(cleanCode)) {
+      alert("编码只能包含大写字母、数字、下划线或短横线，长度 4-20 位")
+      return
+    }
 
-      if (!user) {
-        router.push("/login")
-        return
-      }
+    setLoading(true)
 
-      const code = makeWallCode()
+    const { data: userData } = await supabase.auth.getUser()
+    const user = userData.user
 
-      const { data: wall, error } = await supabase
-        .from("photo_walls")
-        .insert([
-          {
-            name: name.trim(),
-            description: description.trim() || null,
-            code,
-            created_by: user.id,
-          },
-        ])
-        .select()
-        .single()
+    if (!user) {
+      router.push("/login")
+      return
+    }
 
-      if (error || !wall) {
-        console.log("创建照片墙失败:", error)
-        alert("创建失败，可能编码重复，请再试一次")
-        return
-      }
-
-      await supabase.from("wall_members").insert([
+    const { data: wall, error } = await supabase
+      .from("photo_walls")
+      .insert([
         {
-          wall_id: wall.id,
-          user_id: user.id,
-          role: "owner",
+          name: cleanName,
+          description: description.trim() || null,
+          code: cleanCode,
+          created_by: user.id,
         },
       ])
+      .select()
+      .single()
 
-      setName("")
-      setDescription("")
-      fetchWalls()
-      alert(`照片墙创建成功，编码是：${code}`)
-    } finally {
-      setLoading(false)
+    setLoading(false)
+
+    if (error || !wall) {
+      alert("创建失败：编码可能已经被占用")
+      console.log(error)
+      return
     }
+
+    await supabase.from("wall_members").insert([
+      {
+        wall_id: wall.id,
+        user_id: user.id,
+        role: "owner",
+      },
+    ])
+
+    setName("")
+    setDescription("")
+    setCustomCode("")
+    fetchWalls()
+    alert(`创建成功，照片墙编码是：${cleanCode}`)
   }
 
   const enterByCode = async () => {
@@ -189,6 +191,17 @@ export default function WallsPage() {
           </div>
 
           <div className="form-block">
+            <label className="form-label">自定义编码</label>
+            <input
+              className="text-input full-input"
+              value={customCode}
+              onChange={(e) => setCustomCode(e.target.value.toUpperCase())}
+              placeholder="例如：RFZ2026"
+            />
+            <p className="helper-text">朋友之后用这个编码加入照片墙。</p>
+          </div>
+
+          <div className="form-block">
             <label className="form-label">简介</label>
             <input
               className="text-input full-input"
@@ -210,22 +223,18 @@ export default function WallsPage() {
           <span className="badge">{walls.length} 个</span>
         </div>
 
-        {walls.length === 0 ? (
-          <p className="empty-text">暂无照片墙。</p>
-        ) : (
-          <div className="wall-grid">
-            {walls.map((wall) => (
-              <div key={wall.id} className="wall-card">
-                <h3>{wall.name}</h3>
-                <p>{wall.description || "暂无简介"}</p>
-                <p className="helper-text">编码：{wall.code || "未设置"}</p>
-                <button className="secondary-btn" onClick={() => enterWall(wall)}>
-                  进入
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="wall-grid">
+          {walls.map((wall) => (
+            <div key={wall.id} className="wall-card">
+              <h3>{wall.name}</h3>
+              <p>{wall.description || "暂无简介"}</p>
+              <p className="helper-text">编码：{wall.code || "未设置"}</p>
+              <button className="secondary-btn" onClick={() => enterWall(wall)}>
+                进入
+              </button>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   )
