@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import EditPhotoModal from "@/components/EditPhotoModal"
-
+import PhotoPreviewModal from "@/components/PhotoPreviewModal"
 type Person = {
   id: number
   name: string
@@ -45,7 +45,12 @@ export default function TimelinePage() {
 
     setPersons(data || [])
   }
-
+  const [previewPhoto, setPreviewPhoto] = useState<{
+  title: string | null
+  image_url: string
+  shot_month?: string | null
+  personNames?: string
+} | null>(null)
   const fetchPhotos = async () => {
     const { data, error } = await supabase
       .from("photos")
@@ -204,7 +209,19 @@ export default function TimelinePage() {
 
                       return (
                         <div key={photo.id} className="photo-card">
-                          <img src={photo.image_url} alt="" className="photo-image" />
+                          <img
+  src={photo.image_url}
+  alt=""
+  className="photo-image clickable-image"
+  onClick={() =>
+    setPreviewPhoto({
+      title: photo.title,
+      image_url: photo.image_url,
+      shot_month: photo.shot_month,
+      personNames,
+    })
+  }
+/>
 
                           <div className="photo-card-body">
                             <div className="photo-title">
@@ -237,6 +254,10 @@ export default function TimelinePage() {
                   </div>
                 </div>
               ))}
+              <PhotoPreviewModal
+  photo={previewPhoto}
+  onClose={() => setPreviewPhoto(null)}
+/>
             </div>
           ))
         )}

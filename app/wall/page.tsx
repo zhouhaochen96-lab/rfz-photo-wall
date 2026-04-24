@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabase"
 import EditPhotoModal from "@/components/EditPhotoModal"
-
+import PhotoPreviewModal from "@/components/PhotoPreviewModal"
 type Person = {
   id: number
   name: string
@@ -45,7 +45,12 @@ export default function WallPage() {
 
     setPersons(data || [])
   }
-
+  const [previewPhoto, setPreviewPhoto] = useState<{
+  title: string | null
+  image_url: string
+  shot_month?: string | null
+  personNames?: string
+} | null>(null)
   const fetchPhotos = async () => {
     const { data, error } = await supabase
       .from("photos")
@@ -144,7 +149,18 @@ export default function WallPage() {
 
             return (
               <div key={photo.id} className="photo-wall-card">
-                <img src={photo.image_url} alt={photo.title || "photo"} />
+                <img
+  src={photo.image_url}
+  alt={photo.title || "photo"}
+  onClick={() =>
+    setPreviewPhoto({
+      title: photo.title,
+      image_url: photo.image_url,
+      shot_month: photo.shot_month,
+      personNames,
+    })
+  }
+/>
 
                 <div className="photo-wall-overlay">
                   <h3>{photo.title || "未命名照片"}</h3>
@@ -177,6 +193,10 @@ export default function WallPage() {
         onClose={() => setEditingPhoto(null)}
         onSaved={fetchPhotos}
       />
+      <PhotoPreviewModal
+  photo={previewPhoto}
+  onClose={() => setPreviewPhoto(null)}
+/>
     </div>
   )
 }
