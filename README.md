@@ -6,7 +6,7 @@
 
 ## 🌐 在线地址
 
-👉 https://你的vercel域名.vercel.app
+👉 https://rfz-photo-wall.vercel.app/timeline
 
 ---
 
