@@ -7,18 +7,12 @@ export const metadata = {
   description: "我们的高中毕业回忆档案馆",
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="zh-CN">
       <body>
-        <div className="app-shell">
-          <Navbar />
-          <main className="page-container">{children}</main>
-        </div>
+        <Navbar />
+        <main className="page-container">{children}</main>
       </body>
     </html>
   )
