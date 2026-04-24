@@ -34,7 +34,7 @@ export default function LoginPage() {
       }
 
       setMessage("登录成功，正在跳转...")
-      window.location.assign("/walls")
+      window.location.href = "/walls"
     } catch (err) {
       console.log("login catch error:", err)
       setMessage("登录异常，请打开控制台查看错误")
