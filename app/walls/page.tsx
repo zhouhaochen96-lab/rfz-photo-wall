@@ -9,6 +9,11 @@ type PhotoWall = {
   id: number
   name: string
   description: string | null
+  code: string | null
+}
+
+function makeWallCode() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase()
 }
 
 export default function WallsPage() {
@@ -16,6 +21,7 @@ export default function WallsPage() {
   const [walls, setWalls] = useState<PhotoWall[]>([])
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
+  const [joinCode, setJoinCode] = useState("")
   const [loading, setLoading] = useState(false)
 
   const checkUser = async () => {
@@ -54,12 +60,15 @@ export default function WallsPage() {
         return
       }
 
+      const code = makeWallCode()
+
       const { data: wall, error } = await supabase
         .from("photo_walls")
         .insert([
           {
             name: name.trim(),
             description: description.trim() || null,
+            code,
             created_by: user.id,
           },
         ])
@@ -68,7 +77,7 @@ export default function WallsPage() {
 
       if (error || !wall) {
         console.log("创建照片墙失败:", error)
-        alert("创建失败")
+        alert("创建失败，可能编码重复，请再试一次")
         return
       }
 
@@ -83,10 +92,54 @@ export default function WallsPage() {
       setName("")
       setDescription("")
       fetchWalls()
-      alert("照片墙创建成功")
+      alert(`照片墙创建成功，编码是：${code}`)
     } finally {
       setLoading(false)
     }
+  }
+
+  const enterByCode = async () => {
+    const cleanCode = joinCode.trim().toUpperCase()
+
+    if (!cleanCode) {
+      alert("请输入照片墙编码")
+      return
+    }
+
+    const { data: userData } = await supabase.auth.getUser()
+    const user = userData.user
+
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    const { data: wall, error } = await supabase
+      .from("photo_walls")
+      .select("*")
+      .eq("code", cleanCode)
+      .single()
+
+    if (error || !wall) {
+      alert("没有找到这个编码对应的照片墙")
+      return
+    }
+
+    await supabase.from("wall_members").upsert(
+      [
+        {
+          wall_id: wall.id,
+          user_id: user.id,
+          role: "member",
+        },
+      ],
+      {
+        onConflict: "wall_id,user_id",
+      }
+    )
+
+    setCurrentWall({ id: wall.id, name: wall.name })
+    router.push("/timeline")
   }
 
   const enterWall = (wall: PhotoWall) => {
@@ -103,7 +156,22 @@ export default function WallsPage() {
     <div className="page-stack">
       <section className="hero-card">
         <h1>选择照片墙</h1>
-        <p>一个账号可以进入不同的照片墙，每个照片墙的数据相互独立。</p>
+        <p>通过照片墙编码加入已有照片墙，或创建新的照片墙。</p>
+      </section>
+
+      <section className="panel-card">
+        <h2>通过编码进入照片墙</h2>
+        <div className="inline-form">
+          <input
+            className="text-input"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            placeholder="输入照片墙编码，例如 RFZ2026"
+          />
+          <button className="primary-btn" onClick={enterByCode}>
+            进入照片墙
+          </button>
+        </div>
       </section>
 
       <section className="panel-card">
@@ -143,15 +211,16 @@ export default function WallsPage() {
         </div>
 
         {walls.length === 0 ? (
-          <p className="empty-text">暂无照片墙，先创建一个吧。</p>
+          <p className="empty-text">暂无照片墙。</p>
         ) : (
           <div className="wall-grid">
             {walls.map((wall) => (
               <div key={wall.id} className="wall-card">
                 <h3>{wall.name}</h3>
                 <p>{wall.description || "暂无简介"}</p>
-                <button className="primary-btn" onClick={() => enterWall(wall)}>
-                  进入照片墙
+                <p className="helper-text">编码：{wall.code || "未设置"}</p>
+                <button className="secondary-btn" onClick={() => enterWall(wall)}>
+                  进入
                 </button>
               </div>
             ))}

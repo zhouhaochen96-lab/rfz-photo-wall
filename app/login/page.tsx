@@ -18,7 +18,11 @@ export default function LoginPage() {
 
     try {
       setLoading(true)
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
       if (error) {
         alert(error.message)
@@ -39,15 +43,47 @@ export default function LoginPage() {
 
     try {
       setLoading(true)
-      const { error } = await supabase.auth.signUp({ email, password })
+
+      const redirectTo = `${window.location.origin}/walls`
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+        },
+      })
 
       if (error) {
         alert(error.message)
         return
       }
 
-      alert("注册成功。如果 Supabase 开启了邮箱验证，请先去邮箱确认。")
-      router.push("/walls")
+      alert("注册邮件已发送，请先去邮箱完成验证。")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const resetPassword = async () => {
+    if (!email) {
+      alert("请输入邮箱后再点击找回密码")
+      return
+    }
+
+    try {
+      setLoading(true)
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/update-password`,
+      })
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      alert("找回密码邮件已发送，请查收邮箱。")
     } finally {
       setLoading(false)
     }
@@ -57,7 +93,7 @@ export default function LoginPage() {
     <div className="auth-page">
       <section className="auth-card">
         <h1>登录 RFZ照片墙</h1>
-        <p>登录后可以选择或创建属于你们自己的照片墙。</p>
+        <p>登录后可以通过照片墙编码进入对应照片墙。</p>
 
         <div className="form-block">
           <label className="form-label">邮箱</label>
@@ -85,7 +121,10 @@ export default function LoginPage() {
             {loading ? "处理中..." : "登录"}
           </button>
           <button className="secondary-btn" onClick={register} disabled={loading}>
-            注册
+            注册并验证邮箱
+          </button>
+          <button className="ghost-btn" onClick={resetPassword} disabled={loading}>
+            忘记密码
           </button>
         </div>
       </section>
