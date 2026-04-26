@@ -5,6 +5,7 @@ import EditPhotoModal from "../components/EditPhotoModal.vue"
 import PhotoPreviewModal from "../components/PhotoPreviewModal.vue"
 import { listPersons, listPhotos, removePhoto } from "../api/client"
 import type { Person, Photo } from "../types"
+import { downloadPhotoToLocal } from "../utils/download"
 
 type PreviewPhoto = {
   title: string | null
@@ -18,6 +19,7 @@ const photos = ref<Photo[]>([])
 const activePersonId = ref<number | null>(null)
 const editingPhoto = ref<Photo | null>(null)
 const deletingId = ref<number | null>(null)
+const downloadingId = ref<number | null>(null)
 const previewPhoto = ref<PreviewPhoto | null>(null)
 
 async function fetchPersons() {
@@ -44,6 +46,17 @@ async function deletePhoto(photo: Photo) {
     alert(error instanceof Error ? error.message : "删除失败，请稍后再试")
   } finally {
     deletingId.value = null
+  }
+}
+
+async function downloadPhoto(photo: Photo) {
+  try {
+    downloadingId.value = photo.id
+    await downloadPhotoToLocal(photo)
+  } catch (error) {
+    alert(error instanceof Error ? error.message : "下载失败，请稍后再试")
+  } finally {
+    downloadingId.value = null
   }
 }
 
@@ -116,6 +129,13 @@ onMounted(() => {
           <p>{{ photo.shot_month || "未填写时间" }}</p>
 
           <div class="card-actions" @click.stop>
+            <button
+              class="secondary-btn"
+              :disabled="downloadingId === photo.id"
+              @click="downloadPhoto(photo)"
+            >
+              {{ downloadingId === photo.id ? "下载中..." : "下载" }}
+            </button>
             <button class="secondary-btn" @click="editingPhoto = photo">编辑</button>
             <button
               class="danger-btn"

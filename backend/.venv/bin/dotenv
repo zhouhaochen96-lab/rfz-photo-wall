@@ -1,4 +1,4 @@
-#!/home/fuzz/PhotoWall/backend/.venv/bin/python
+#!/home/fuzz/rfz-photo-wall/backend/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
